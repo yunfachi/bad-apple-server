@@ -28,11 +28,7 @@ public final class MetaHolder {
     public <T> void set(MetadataDef.@NotNull Entry<T> entry, T value) {
         final int id = entry.index();
         final Metadata.Entry<?> result = switch (entry) {
-            case MetadataDef.Entry.Index<T> v -> {
-                var tmp = v.function().apply(value);
-                this.entries.put(id, tmp);
-                yield tmp;
-            }
+            case MetadataDef.Entry.Index<T> v -> v.function().apply(value);
             case MetadataDef.Entry.Mask mask -> {
                 byte maskValue;
                 Metadata.Entry<?> currentEntry = this.entries.get(id);
