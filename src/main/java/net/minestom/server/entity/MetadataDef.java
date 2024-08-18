@@ -528,6 +528,15 @@ public sealed class MetadataDef {
         public static final Entry<Integer> FUSE_TIME = index(0, Metadata::VarInt, 80);
     }
 
+    /**
+     * Get the number of metadata entries for a specific class.
+     * <p>
+     * Useful if you want to pre-allocate the metadata array.
+     */
+    public static <T extends MetadataDef> int count(Class<T> clazz) {
+        return MetadataDefImpl.count(clazz);
+    }
+
     public sealed interface Entry<T> {
         int index();
 

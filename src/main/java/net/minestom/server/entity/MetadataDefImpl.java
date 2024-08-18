@@ -21,6 +21,19 @@ final class MetadataDefImpl {
         return new MetadataDef.Entry.Mask(superIndex + index, bitMask, defaultValue);
     }
 
+    static <T extends MetadataDef> int count(Class<T> clazz) {
+        final String name = clazz.getName();
+        try {
+            // Force load the class to ensure entries are registered
+            Class.forName(name);
+        } catch (ClassNotFoundException e) {
+            throw new RuntimeException(e);
+        }
+        final int classIndex = MAX_INDEX.get(name);
+        final int superIndex = findSuperIndex(name);
+        return classIndex + superIndex + 1;
+    }
+
     private static String caller() {
         return Thread.currentThread().getStackTrace()[3].getClassName();
     }
