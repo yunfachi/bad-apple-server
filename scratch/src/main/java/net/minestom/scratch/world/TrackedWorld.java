@@ -53,7 +53,7 @@ public final class TrackedWorld implements Block.Getter, Block.Setter {
     }
 
     public ChunkDataPacket generatePacket(int chunkX, int chunkZ) {
-        final Chunk chunk = chunks.computeIfAbsent(chunkIndex(chunkX, chunkZ), i -> new Chunk());
+        final Chunk chunk = chunks.computeIfAbsent(chunkIndex(chunkX, chunkZ), i -> new Chunk(chunkX, chunkZ));
         final byte[] data = NetworkBuffer.makeArray(networkBuffer -> {
             for (Section section : chunk.sections) {
                 networkBuffer.write(SHORT, (short) section.blocks.count());
@@ -75,9 +75,19 @@ public final class TrackedWorld implements Block.Getter, Block.Setter {
         );
     }
 
+    public List<Section> loadedSections() {
+        List<Section> sections = new ArrayList<>();
+        for (Chunk chunk : chunks.values()) {
+            sections.addAll(Arrays.asList(chunk.sections));
+        }
+        return sections;
+    }
+
     @Override
     public void setBlock(int x, int y, int z, @NotNull Block block) {
-        final Chunk chunk = chunks.computeIfAbsent(chunkIndex(x >> 4, z >> 4), i -> new Chunk());
+        final int chunkX = x >> 4;
+        final int chunkZ = z >> 4;
+        final Chunk chunk = chunks.computeIfAbsent(chunkIndex(chunkX, chunkZ), i -> new Chunk(chunkX, chunkZ));
         final int blockIndex = blockIndex(x, y, z);
         if (block.registry().isBlockEntity() || block.nbt() != null) chunk.blockEntities.put(blockIndex, block);
         else chunk.blockEntities.remove(blockIndex);
@@ -87,18 +97,20 @@ public final class TrackedWorld implements Block.Getter, Block.Setter {
 
     @Override
     public @UnknownNullability Block getBlock(int x, int y, int z, @NotNull Block.Getter.Condition condition) {
-        final Chunk chunk = chunks.computeIfAbsent(chunkIndex(x >> 4, z >> 4), i -> new Chunk());
+        final int chunkX = x >> 4;
+        final int chunkZ = z >> 4;
+        final Chunk chunk = chunks.computeIfAbsent(chunkIndex(chunkX, chunkZ), i -> new Chunk(chunkX, chunkZ));
         final Section section = chunk.sections[(y >> 4) - minSection];
         final int stateId = section.blocks.get(x & 0xF, y & 0xF, z & 0xF);
         return Block.fromStateId((short) stateId);
     }
 
-    private final class Chunk {
+    public final class Chunk {
         private final Section[] sections = new Section[sectionCount];
         private final Int2ObjectMap<Block> blockEntities = new Int2ObjectOpenHashMap<>();
 
-        {
-            Arrays.setAll(sections, i -> new Section());
+        public Chunk(int chunkX, int chunkZ) {
+            Arrays.setAll(sections, i -> new Section(chunkX, minSection + i, chunkZ));
             // Generate blocks
             GeneratorImpl.GenSection[] genSections = new GeneratorImpl.GenSection[sectionCount];
             Arrays.setAll(genSections, i -> {
@@ -110,9 +122,11 @@ public final class TrackedWorld implements Block.Getter, Block.Setter {
         }
     }
 
-    private static final class Section {
-        private final Palette blocks = Palette.blocks();
-        private final Palette biomes = Palette.biomes();
+    public record Section(int sectionX, int sectionY, int sectionZ,
+                          Palette blocks, Palette biomes) {
+        public Section(int sectionX, int sectionY, int sectionZ) {
+            this(sectionX, sectionY, sectionZ, Palette.blocks(), Palette.biomes());
+        }
     }
 
     public DimensionType dimensionType() {
