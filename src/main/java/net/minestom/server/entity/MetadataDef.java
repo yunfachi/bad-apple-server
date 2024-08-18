@@ -124,7 +124,7 @@ public sealed class MetadataDef {
     }
 
     public static final class ThrownTrident extends AbstractArrow {
-        public static final Entry<Integer> LOYALTY_LEVEL = index(0, Metadata::VarInt, 0);
+        public static final Entry<Byte> LOYALTY_LEVEL = index(0, Metadata::Byte, (byte) 0);
         public static final Entry<Boolean> HAS_ENCHANTMENT_GLINT = index(1, Metadata::Boolean, false);
     }
 
