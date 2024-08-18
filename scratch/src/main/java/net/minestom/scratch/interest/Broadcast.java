@@ -216,7 +216,10 @@ public final class Broadcast {
 
             public void signalLocal(ServerPacket.Play packet) {
                 Chunk chunk = chunks.get(chunkIndex(newChunkX, newChunkZ));
-                if (chunk != null) chunk.broadcaster.append(packet, id);
+                if (chunk != null) {
+                    if (receiver) chunk.broadcaster.append(packet, id);
+                    else chunk.broadcaster.append(packet);
+                }
             }
 
             public void signalLocal(List<ServerPacket.Play> packets) {
