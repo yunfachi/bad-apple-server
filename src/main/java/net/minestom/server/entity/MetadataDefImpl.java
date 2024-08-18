@@ -7,28 +7,32 @@ import java.util.function.Function;
 final class MetadataDefImpl {
     static final Map<String, Integer> MAX_INDEX = new HashMap<>();
 
-    static <T> MetadataDef.Entry<T> index(int index, Function<T, Metadata.Entry<T>> function, T defaultValue) {
-        storeMaxIndex(index);
-        final int superIndex = findSuperIndex();
+    static <T> MetadataDef.Entry.Index<T> index(int index, Function<T, Metadata.Entry<T>> function, T defaultValue) {
+        final String caller = caller();
+        storeMaxIndex(caller, index);
+        final int superIndex = findSuperIndex(caller);
         return new MetadataDef.Entry.Index<>(superIndex + index, function, defaultValue);
     }
 
-    static <T> MetadataDef.Entry<Boolean> mask(int index, int bitMask, boolean defaultValue) {
-        storeMaxIndex(index);
-        final int superIndex = findSuperIndex();
+    static MetadataDef.Entry.Mask mask(int index, int bitMask, boolean defaultValue) {
+        final String caller = caller();
+        storeMaxIndex(caller, index);
+        final int superIndex = findSuperIndex(caller);
         return new MetadataDef.Entry.Mask(superIndex + index, bitMask, defaultValue);
     }
 
-    static void storeMaxIndex(int index) {
-        final String className = Thread.currentThread().getStackTrace()[3].getClassName();
-        final int currentMax = MAX_INDEX.getOrDefault(className, 0);
-        MAX_INDEX.put(className, Math.max(currentMax, index));
+    private static String caller() {
+        return Thread.currentThread().getStackTrace()[3].getClassName();
     }
 
-    static int findSuperIndex() {
+    static void storeMaxIndex(String caller, int index) {
+        final int currentMax = MAX_INDEX.getOrDefault(caller, 0);
+        MAX_INDEX.put(caller, Math.max(currentMax, index));
+    }
+
+    static int findSuperIndex(String caller) {
         try {
-            final String className = Thread.currentThread().getStackTrace()[3].getClassName();
-            final Class<?> subclass = Class.forName(className);
+            final Class<?> subclass = Class.forName(caller);
             Class<?> superclass = subclass.getSuperclass();
             if (superclass == Object.class) return 0;
 
