@@ -12,19 +12,12 @@ public final class RecipeCompute {
 
     public static @Nullable CraftResult searchCraft(List<Recipe> recipes, int width, int height, ItemStack[] items) {
         for (Recipe recipe : recipes) {
-            switch (recipe.data()) {
-                case Recipe.Shaped shaped -> {
-                    final CraftResult result = searchShaped(shaped, width, height, items);
-                    if (result != null) return result;
-                }
-                case Recipe.Shapeless shapeless -> {
-                    final CraftResult result = searchShapeless(shapeless, items);
-                    if (result != null) return result;
-                }
-                default -> {
-                    // Ignore
-                }
-            }
+            final CraftResult result = switch (recipe.data()) {
+                case Recipe.Shaped shaped -> searchShaped(shaped, width, height, items);
+                case Recipe.Shapeless shapeless -> searchShapeless(shapeless, items);
+                default -> null;
+            };
+            if (result != null) return result;
         }
         return null;
     }

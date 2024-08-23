@@ -1,5 +1,7 @@
 package template;
 
+import net.kyori.adventure.nbt.CompoundBinaryTag;
+import net.kyori.adventure.nbt.TagStringIOExt;
 import net.kyori.adventure.text.Component;
 import net.minestom.scratch.block.BlockEntityHandler;
 import net.minestom.scratch.command.LegacyStringArrayCommands;
@@ -16,6 +18,7 @@ import net.minestom.server.MinecraftServer;
 import net.minestom.server.collision.Aerodynamics;
 import net.minestom.server.collision.PhysicsResult;
 import net.minestom.server.collision.PhysicsUtils;
+import net.minestom.server.component.DataComponentMap;
 import net.minestom.server.coordinate.ChunkRangeUtils;
 import net.minestom.server.coordinate.Point;
 import net.minestom.server.coordinate.Pos;
@@ -171,11 +174,12 @@ public final class SurvivalTemplate {
         Scanner scanner = new Scanner(System.in);
         while (!stop.get()) {
             final String line = scanner.nextLine();
-            if (line.equals("stop")) {
-                stop.set(true);
-                System.out.println("Stopping server...");
-            } else if (line.equals("gc")) {
-                System.gc();
+            switch (line) {
+                case "stop" -> {
+                    stop.set(true);
+                    System.out.println("Stopping server...");
+                }
+                case "gc" -> System.gc();
             }
         }
     }
@@ -687,6 +691,18 @@ public final class SurvivalTemplate {
                             entities.put(entity.id, entity);
                             entity.moveTo(position);
                             sendMessage(Component.text("Spawned entity"));
+                        },
+                        "datacomponent", s -> {
+                            final ItemStack handItem = inventoryHolder.getHandItem(PlayerHand.MAIN);
+                            if (handItem.isAir()) {
+                                sendMessage(Component.text("No item in hand"));
+                                return;
+                            }
+                            final CompoundBinaryTag data = handItem.toItemNBT();
+                            final String snbt = TagStringIOExt.writeTag(data);
+                            final DataComponentMap components = handItem.material().prototype();
+                            sendMessage(Component.text("SNBT: " + snbt));
+                            sendMessage(Component.text("Prototype: " + components));
                         }
                 )
         );
@@ -779,9 +795,11 @@ public final class SurvivalTemplate {
             //this.inventoryHolder.addItem( ItemStack.of(Material.GOLDEN_CHESTPLATE));
             //this.inventoryHolder.addItem( ItemStack.of(Material.DIAMOND_LEGGINGS));
             this.inventoryHolder.addItem(ItemStack.of(Material.APPLE, 64));
-            //this.inventoryHolder.addItem( ItemStack.of(Material.ENCHANTED_GOLDEN_APPLE, 64));
+            this.inventoryHolder.addItem(ItemStack.of(Material.ENCHANTED_GOLDEN_APPLE, 64));
             this.inventoryHolder.addItem(ItemStack.of(Material.OAK_PLANKS, 64));
             this.inventoryHolder.addItem(ItemStack.of(Material.DIRT, 64));
+            this.inventoryHolder.addItem(ItemStack.of(Material.OAK_SAPLING, 64));
+            this.inventoryHolder.addItem(ItemStack.of(Material.BONE_MEAL, 64));
             this.inventoryHolder.addItem(ItemStack.of(Material.COBBLESTONE, 64));
             this.inventoryHolder.addItem(ItemStack.of(Material.FURNACE, 64));
             this.inventoryHolder.addItem(ItemStack.of(Material.COAL, 64));
@@ -879,8 +897,8 @@ public final class SurvivalTemplate {
                 this.movement.accept(packet);
                 this.chunkLoading.accept(packet);
                 this.entityInteract.accept(packet);
-                if (packet instanceof ClientCommandChatPacket commandChatPacket) commands.consume(commandChatPacket);
                 switch (packet) {
+                    case ClientCommandChatPacket commandChatPacket -> commands.consume(commandChatPacket);
                     case ClientHeldItemChangePacket heldItemChangePacket -> {
                         this.inventoryHolder.consume(heldItemChangePacket);
                         this.healthHandler.cancelEating();
@@ -931,23 +949,32 @@ public final class SurvivalTemplate {
                     }
                     case ClientPlayerDiggingPacket diggingPacket -> {
                         handle(blockInteractionHandler.consume(diggingPacket, gameMode == GameMode.CREATIVE));
-                        if (diggingPacket.status() == ClientPlayerDiggingPacket.Status.UPDATE_ITEM_STATE) {
-                            this.healthHandler.cancelEating();
-                        } else if (diggingPacket.status() == ClientPlayerDiggingPacket.Status.DROP_ITEM) {
-                            final ItemStack currentHand = inventoryHolder.getHandItem(PlayerHand.MAIN);
-                            ItemEntity itemEntity = new ItemEntity(instance, position.withY(y -> y + 1.5), currentHand.withAmount(1));
-                            itemEntity.velocity = position.direction().mul(0.3);
-                            items.put(itemEntity.id, itemEntity);
-                            final ItemStack updated = currentHand.withAmount(amount -> amount - 1);
-                            inventoryHolder.setItem(inventoryHolder.heldSlot(), updated);
-                            if (updated.isAir()) synchronizerEntry.signalLocal(inventoryHolder.equipmentPacket());
-                        } else if (diggingPacket.status() == ClientPlayerDiggingPacket.Status.DROP_ITEM_STACK) {
-                            final ItemStack item = inventoryHolder.getHandItem(PlayerHand.MAIN);
-                            ItemEntity itemEntity = new ItemEntity(instance, position.withY(y -> y + 1.5), item);
-                            itemEntity.velocity = position.direction().mul(0.3);
-                            items.put(itemEntity.id, itemEntity);
-                            inventoryHolder.setItem(inventoryHolder.heldSlot(), ItemStack.AIR);
-                            synchronizerEntry.signalLocal(inventoryHolder.equipmentPacket());
+                        switch (diggingPacket.status()) {
+                            case UPDATE_ITEM_STATE -> this.healthHandler.cancelEating();
+                            case DROP_ITEM -> {
+                                final ItemStack currentHand = inventoryHolder.getHandItem(PlayerHand.MAIN);
+                                ItemEntity itemEntity = new ItemEntity(instance, position.withY(y -> y + 1.5), currentHand.withAmount(1));
+                                itemEntity.velocity = position.direction().mul(0.3);
+                                items.put(itemEntity.id, itemEntity);
+                                final ItemStack updated = currentHand.withAmount(amount -> amount - 1);
+                                inventoryHolder.setItem(inventoryHolder.heldSlot(), updated);
+                                if (updated.isAir()) synchronizerEntry.signalLocal(inventoryHolder.equipmentPacket());
+                            }
+                            case DROP_ITEM_STACK -> {
+                                final ItemStack item = inventoryHolder.getHandItem(PlayerHand.MAIN);
+                                ItemEntity itemEntity = new ItemEntity(instance, position.withY(y -> y + 1.5), item);
+                                itemEntity.velocity = position.direction().mul(0.3);
+                                items.put(itemEntity.id, itemEntity);
+                                inventoryHolder.setItem(inventoryHolder.heldSlot(), ItemStack.AIR);
+                                synchronizerEntry.signalLocal(inventoryHolder.equipmentPacket());
+                            }
+                            case SWAP_ITEM_HAND -> {
+                                final ItemStack mainHand = inventoryHolder.getHandItem(PlayerHand.MAIN);
+                                final ItemStack offHand = inventoryHolder.getHandItem(PlayerHand.OFF);
+                                inventoryHolder.setHandItem(PlayerHand.MAIN, offHand);
+                                inventoryHolder.setHandItem(PlayerHand.OFF, mainHand);
+                                synchronizerEntry.signalLocalSelf(inventoryHolder.equipmentPacket());
+                            }
                         }
                     }
                     case ClientPlayerBlockPlacementPacket blockPlacementPacket ->
@@ -975,6 +1002,7 @@ public final class SurvivalTemplate {
         }
 
         private void unregister() {
+            serverBroadcast.broadcast(getRemovePlayerToList());
             players.remove(id);
             var synchronizerEntry = this.synchronizerEntry;
             if (synchronizerEntry != null) synchronizerEntry.unmake();
@@ -1014,6 +1042,10 @@ public final class SurvivalTemplate {
                     true, 1, gameMode, null, null);
             return new PlayerInfoUpdatePacket(EnumSet.of(PlayerInfoUpdatePacket.Action.ADD_PLAYER, PlayerInfoUpdatePacket.Action.UPDATE_LISTED),
                     List.of(infoEntry));
+        }
+
+        private PlayerInfoRemovePacket getRemovePlayerToList() {
+            return new PlayerInfoRemovePacket(uuid);
         }
     }
 }

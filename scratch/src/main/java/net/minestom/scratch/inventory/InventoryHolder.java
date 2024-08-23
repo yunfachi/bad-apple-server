@@ -57,9 +57,19 @@ public final class InventoryHolder {
     }
 
     public ItemStack getHandItem(PlayerHand hand) {
+        final int slot = handSlot(hand);
+        return inventory[slot];
+    }
+
+    public void setHandItem(PlayerHand hand, ItemStack item) {
+        final int slot = handSlot(hand);
+        inventory[slot] = item;
+    }
+
+    public int handSlot(PlayerHand hand) {
         return switch (hand) {
-            case MAIN -> inventory[heldSlot];
-            case OFF -> inventory[SlotUtils.OFFHAND_SLOT];
+            case MAIN -> heldSlot;
+            case OFF -> SlotUtils.OFFHAND_SLOT;
         };
     }
 
@@ -84,10 +94,7 @@ public final class InventoryHolder {
     }
 
     public void consumeItem(PlayerHand hand) {
-        final int slot = switch (hand) {
-            case MAIN -> heldSlot;
-            case OFF -> SlotUtils.OFFHAND_SLOT;
-        };
+        final int slot = handSlot(hand);
         consumeItem(slot);
     }
 
