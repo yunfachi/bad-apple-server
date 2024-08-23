@@ -992,8 +992,10 @@ public final class SurvivalTemplate {
                 switch (action) {
                     case HealthHandler.Action.ApplyEffect applyEffect ->
                             this.potionHolder.apply(applyEffect.potionEffect());
-                    case HealthHandler.Action.ConsumeItem consumeItem ->
-                            this.inventoryHolder.consumeItem(consumeItem.slot());
+                    case HealthHandler.Action.ConsumeItem consumeItem -> {
+                        this.inventoryHolder.consumeItem(consumeItem.slot());
+                        this.synchronizerEntry.signalLocal(inventoryHolder.equipmentPacket());
+                    }
                 }
             }
             this.potionHolder.updateEffects();
@@ -1028,6 +1030,7 @@ public final class SurvivalTemplate {
                         instance.blockHolder.setBlock(point, block);
                         instance.synchronizer.signalAt(point, new BlockChangePacket(point, block));
                         inventoryHolder.consumeItem(placeBlock.hand());
+                        synchronizerEntry.signalLocal(inventoryHolder.equipmentPacket());
                     }
                     case BlockInteractionHandler.Action.InteractBlock interactBlock -> {
                         final Point point = interactBlock.blockPosition();

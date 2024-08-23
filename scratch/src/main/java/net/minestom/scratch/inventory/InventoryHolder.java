@@ -88,9 +88,6 @@ public final class InventoryHolder {
         ItemStack current = inventory[slot];
         final ItemStack updated = current.withAmount(current.amount() - 1);
         this.inventory[slot] = updated;
-        if (isHandSlot(slot)) {
-            this.localBroadcastConsumer.accept(equipmentPacket());
-        }
     }
 
     public void consumeItem(PlayerHand hand) {
