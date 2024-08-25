@@ -75,6 +75,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.function.Supplier;
 
+import static net.minestom.scratch.entity.EntityLogic.Goal;
+
 /**
  * Server attempting to replicate a survival experience.
  * <p>
@@ -461,7 +463,13 @@ public final class SurvivalTemplate {
         }
     }
 
-    final class ItemEntity {
+    sealed interface Actor {
+        int id();
+
+        Pos position();
+    }
+
+    final class ItemEntity implements Actor {
         private static final int PICKUP_DELAY = 10;
         private final int id = lastEntityId.incrementAndGet();
         private final UUID uuid = UUID.randomUUID();
@@ -525,9 +533,19 @@ public final class SurvivalTemplate {
             SurvivalTemplate.this.items.remove(id);
             synchronizerEntry.unmake();
         }
+
+        @Override
+        public int id() {
+            return id;
+        }
+
+        @Override
+        public Pos position() {
+            return position;
+        }
     }
 
-    final class Entity {
+    final class Entity implements Actor {
         private final int id = lastEntityId.incrementAndGet();
         private final UUID uuid = UUID.randomUUID();
         final EntityType type;
@@ -547,6 +565,15 @@ public final class SurvivalTemplate {
                 Map.of(), null);
         final Supplier<List<ServerPacket.Play>> destroyPackets = () -> EntityInitPackets.entityDestroy(id);
 
+        Actor target;
+        final EntityLogic logic = new EntityLogic(
+                //new Goal.Revenge(),
+                //new Goal.ActiveTarget(EntityType.PLAYER),
+                //new Goal.LookAtTarget(),
+                new Goal.LookAround(50),
+                new Goal.Wander(5, 50)
+        );
+
         Entity(EntityType type, Instance instance, Pos position) {
             this.type = type;
             this.instance = instance;
@@ -556,7 +583,12 @@ public final class SurvivalTemplate {
         }
 
         boolean tick() {
-            this.velocity = velocity.add(pathVelocity());
+            processAI();
+            final Vec pathVelocity = pathVelocity();
+            if (!pathVelocity.isZero()) {
+                this.velocity = pathVelocity;
+                this.position = position.withDirection(pathVelocity);
+            }
             PhysicsResult physicsResult = PhysicsUtils.simulateMovement(position, velocity, type.registry().boundingBox(),
                     instance.worldBorder, instance.blockHolder, aerodynamics,
                     false, true, onGround, false, null);
@@ -567,11 +599,32 @@ public final class SurvivalTemplate {
 
             synchronizerEntry.move(physicsResult.newPosition());
             synchronizerEntry.signalLocal(new EntityTeleportPacket(id, physicsResult.newPosition(), onGround));
+            synchronizerEntry.signalLocal(new EntityHeadLookPacket(id, position.yaw()));
             if (!velocity.isZero()) synchronizerEntry.signalLocal(new EntityVelocityPacket(id, velocity.mul(8000f)));
             return true;
         }
 
+        private void processAI() {
+            List<EntityLogic.Action> actions = logic.process(target != null);
+            for (EntityLogic.Action action : actions) {
+                switch (action) {
+                    case EntityLogic.Action.Attack attack -> {
+                    }
+                    case EntityLogic.Action.SearchTarget searchTarget -> {
+                    }
+                    case EntityLogic.Action.SetPath setPath -> {
+                        moveTo(position.add(setPath.point()));
+                    }
+                    case EntityLogic.Action.LookAt lookAt -> {
+                        this.position = position.withDirection(lookAt.point());
+                    }
+                }
+            }
+        }
+
         private Vec pathVelocity() {
+            var path = this.path;
+            if (path == null) return Vec.ZERO;
             if (path.getNodes().isEmpty()) return Vec.ZERO;
             Point currentTarget = path.getCurrent();
             if (currentTarget == null) return Vec.ZERO;
@@ -603,9 +656,19 @@ public final class SurvivalTemplate {
             SurvivalTemplate.this.entities.remove(id);
             synchronizerEntry.unmake();
         }
+
+        @Override
+        public int id() {
+            return id;
+        }
+
+        @Override
+        public Pos position() {
+            return position;
+        }
     }
 
-    final class Player {
+    final class Player implements Actor {
         private final int id = lastEntityId.incrementAndGet();
         private final Connection connection;
         private final String username;
@@ -686,10 +749,14 @@ public final class SurvivalTemplate {
                                 return;
                             }
                         },
-                        "entity", s -> {
-                            var entity = new Entity(EntityType.ZOMBIE, overworld, new Pos(0, 48, 0));
+                        "summon", s -> {
+                            final EntityType entityType = EntityType.fromNamespaceId(s);
+                            if (entityType == null) {
+                                sendMessage(Component.text("Invalid entity type"));
+                                return;
+                            }
+                            var entity = new Entity(entityType, overworld, position);
                             entities.put(entity.id, entity);
-                            entity.moveTo(position);
                             sendMessage(Component.text("Spawned entity"));
                         },
                         "datacomponent", s -> {
@@ -1049,6 +1116,16 @@ public final class SurvivalTemplate {
 
         private PlayerInfoRemovePacket getRemovePlayerToList() {
             return new PlayerInfoRemovePacket(uuid);
+        }
+
+        @Override
+        public int id() {
+            return id;
+        }
+
+        @Override
+        public Pos position() {
+            return position;
         }
     }
 }
