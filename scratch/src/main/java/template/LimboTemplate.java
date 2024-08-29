@@ -50,7 +50,7 @@ import java.util.concurrent.locks.ReentrantLock;
  * Players are unsynchronized, each in their own world.
  */
 public final class LimboTemplate {
-    private static final SocketAddress ADDRESS = new InetSocketAddress("0.0.0.0", 25565);
+    private static final SocketAddress ADDRESS = new InetSocketAddress("0.0.0.0", 25545);
     private static final int VIEW_DISTANCE = 8;
 
     public static void main(String[] args) throws Exception {

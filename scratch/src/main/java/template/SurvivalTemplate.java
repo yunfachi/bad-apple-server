@@ -18,6 +18,7 @@ import net.minestom.server.MinecraftServer;
 import net.minestom.server.collision.Aerodynamics;
 import net.minestom.server.collision.PhysicsResult;
 import net.minestom.server.collision.PhysicsUtils;
+import net.minestom.server.color.DyeColor;
 import net.minestom.server.component.DataComponentMap;
 import net.minestom.server.coordinate.ChunkRangeUtils;
 import net.minestom.server.coordinate.Point;
@@ -34,10 +35,12 @@ import net.minestom.server.entity.pathfinding.generators.GroundNodeGenerator;
 import net.minestom.server.entity.pathfinding.generators.NodeGenerator;
 import net.minestom.server.instance.WorldBorder;
 import net.minestom.server.instance.block.Block;
+import net.minestom.server.instance.block.banner.BannerPattern;
 import net.minestom.server.inventory.InventoryType;
 import net.minestom.server.item.ItemComponent;
 import net.minestom.server.item.ItemStack;
 import net.minestom.server.item.Material;
+import net.minestom.server.item.component.BannerPatterns;
 import net.minestom.server.network.ConnectionState;
 import net.minestom.server.network.packet.client.ClientPacket;
 import net.minestom.server.network.packet.client.common.ClientPingRequestPacket;
@@ -75,6 +78,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.function.Supplier;
 
+import static jp.yunfachi.badapple.Shield.createShield;
+import static jp.yunfachi.badapple.Shield.lr;
 import static net.minestom.scratch.entity.EntityLogic.Goal;
 
 /**
@@ -83,7 +88,7 @@ import static net.minestom.scratch.entity.EntityLogic.Goal;
  * Expect features to be missing, and added over time.
  */
 public final class SurvivalTemplate {
-    private static final SocketAddress ADDRESS = new InetSocketAddress("0.0.0.0", 25565);
+    private static final SocketAddress ADDRESS = new InetSocketAddress("0.0.0.0", 25545);
     private static final int VIEW_DISTANCE = 8;
 
     public static void main(String[] args) throws Exception {
@@ -676,7 +681,7 @@ public final class SurvivalTemplate {
 
         Instance instance;
         Broadcast.World.Entry synchronizerEntry;
-        GameMode gameMode = GameMode.SURVIVAL;
+        GameMode gameMode = GameMode.CREATIVE;
         Pos position;
         Pos oldPosition;
 
@@ -869,7 +874,8 @@ public final class SurvivalTemplate {
             this.inventoryHolder.addItem(ItemStack.of(Material.BONE_MEAL, 64));
             this.inventoryHolder.addItem(ItemStack.of(Material.COBBLESTONE, 64));
             this.inventoryHolder.addItem(ItemStack.of(Material.FURNACE, 64));
-            this.inventoryHolder.addItem(ItemStack.of(Material.COAL, 64));
+            this.inventoryHolder.addItem(createShield(DyeColor.BLACK, lr(DyeColor.WHITE, BannerPattern.CREEPER)));
+
 
             this.connection.networkContext.writePlays(initPackets());
 

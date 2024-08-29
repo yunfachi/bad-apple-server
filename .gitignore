@@ -1,7 +1,7 @@
 # Registry files
 /minecraft_data/
 /.minestom_tmp/
-
+/frames/*
 /chunks/
 
 # Created by .ignore support plugin (hsz.mobi)

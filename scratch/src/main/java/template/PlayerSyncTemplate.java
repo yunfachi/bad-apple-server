@@ -3,27 +3,30 @@ package template;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.TextColor;
 import net.minestom.scratch.interest.Broadcast;
+import net.minestom.scratch.inventory.InventoryHolder;
 import net.minestom.scratch.inventory.ScratchInventoryUtils;
 import net.minestom.scratch.listener.ScratchFeature;
 import net.minestom.scratch.network.NetworkContext;
 import net.minestom.scratch.registry.ScratchRegistryTools;
-import net.minestom.scratch.velocity.ScratchVelocityTools;
 import net.minestom.scratch.world.PaletteWorld;
 import net.minestom.server.MinecraftServer;
 import net.minestom.server.ServerFlag;
 import net.minestom.server.collision.Aerodynamics;
 import net.minestom.server.collision.PhysicsResult;
 import net.minestom.server.collision.PhysicsUtils;
+import net.minestom.server.color.DyeColor;
 import net.minestom.server.coordinate.ChunkRangeUtils;
-import net.minestom.server.coordinate.Point;
 import net.minestom.server.coordinate.Pos;
 import net.minestom.server.coordinate.Vec;
 import net.minestom.server.entity.EntityType;
 import net.minestom.server.entity.GameMode;
 import net.minestom.server.instance.WorldBorder;
 import net.minestom.server.instance.block.Block;
+import net.minestom.server.instance.block.banner.BannerPattern;
+import net.minestom.server.item.ItemComponent;
 import net.minestom.server.item.ItemStack;
 import net.minestom.server.item.Material;
+import net.minestom.server.item.component.BannerPatterns;
 import net.minestom.server.network.ConnectionState;
 import net.minestom.server.network.packet.client.ClientPacket;
 import net.minestom.server.network.packet.client.common.ClientPingRequestPacket;
@@ -39,6 +42,7 @@ import net.minestom.server.network.packet.server.login.LoginSuccessPacket;
 import net.minestom.server.network.packet.server.play.*;
 import net.minestom.server.network.packet.server.play.data.WorldPos;
 import net.minestom.server.network.packet.server.status.ResponsePacket;
+import net.minestom.server.registry.DynamicRegistry;
 import net.minestom.server.world.DimensionType;
 
 import java.io.IOException;
@@ -52,11 +56,26 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static java.lang.Integer.parseInt;
+
+import net.minestom.server.entity.*;
+import net.minestom.server.network.packet.server.play.EntityMetaDataPacket;
+import net.minestom.server.network.packet.server.play.PlayerInfoRemovePacket;
+import net.minestom.server.network.packet.server.play.PlayerInfoUpdatePacket;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.ArrayList;
+import java.util.Map;
+
 /**
  * Sync server where players can see each other interacting with the world.
  */
 public final class PlayerSyncTemplate {
-    private static final SocketAddress ADDRESS = new InetSocketAddress("0.0.0.0", 25565);
+    private static final int BOT_WIDTH = 5;
+    private static final int BOT_HEIGHT = 5;
+
+    private static final SocketAddress ADDRESS = new InetSocketAddress("0.0.0.0", 25545);
     private static final int VIEW_DISTANCE = 8;
 
     public static void main(String[] args) throws Exception {
@@ -78,6 +97,7 @@ public final class PlayerSyncTemplate {
         System.out.println("Server started on: " + ADDRESS);
         Thread.startVirtualThread(this::listenCommands);
         Thread.startVirtualThread(this::listenConnections);
+        MinecraftServer.init();
         ticks();
         server.close();
         System.out.println("Server stopped");
@@ -111,18 +131,27 @@ public final class PlayerSyncTemplate {
     }
 
     void ticks() {
-        {
-            var entity = new Entity(EntityType.ZOMBIE, instance, new Pos(0, 60, 0));
-            entities.put(entity.id, entity);
-        }
+//        {
+//            var entity = new Entity(EntityType.ZOMBIE, instance, new Pos(0, 60, 0));
+//            entities.put(entity.id, entity);
+//        }
         int keepAliveId = 0;
         while (serverRunning()) {
             final long time = System.nanoTime();
             // Connect waiting players
             PlayerInfo playerInfo;
             while ((playerInfo = waitingPlayers.poll()) != null) {
-                final Player player = new Player(playerInfo, instance, new Pos(0, 55, 0));
-                this.players.put(player.id, player);
+                if (playerInfo.username.startsWith("yunfachi_")) {
+                    final Player player = new Player(playerInfo, instance, new Pos(
+                            BOT_WIDTH - parseInt(playerInfo.username.split("_")[2]) * 0.65,
+                            55 + BOT_HEIGHT - parseInt(playerInfo.username.split("_")[1]),
+                            0, 165, 0)
+                    );
+                    this.players.put(player.id, player);
+                } else {
+                    final Player player = new Player(playerInfo, instance, new Pos(0, 55, 0));
+                    this.players.put(player.id, player);
+                }
             }
             // Tick playing players
             List<Player> toRemove = new ArrayList<>();
@@ -235,8 +264,11 @@ public final class PlayerSyncTemplate {
                                     "protocol": %s
                                 },
                                 "players": {
-                                    "max": 100,
-                                    "online": 0
+                                    "max": 69,
+                                    "online": -1,
+                                    "sample": [
+                                            
+                                            ]
                                 },
                                 "description": {
                                     "text": "Awesome Minestom"
@@ -289,7 +321,7 @@ public final class PlayerSyncTemplate {
                     () -> {
                         final var spawnPacket = new SpawnEntityPacket(
                                 id, uuid, type.id(),
-                                this.position, 0, 0, (short) 0, (short) 0, (short) 0
+                                this.position, 165, 0, (short) 0, (short) 0, (short) 0
                         );
                         return List.of(spawnPacket);
                     },
@@ -313,18 +345,36 @@ public final class PlayerSyncTemplate {
         }
     }
 
+    ItemStack createShield(DyeColor BaseColor, BannerPatterns.Layer... layers) {
+        return ItemStack.builder(Material.SHIELD)
+                .set(ItemComponent.BANNER_PATTERNS, new BannerPatterns(List.of(layers).reversed()))
+                .set(ItemComponent.BASE_COLOR, BaseColor)
+                .build();
+    }
+
+    BannerPatterns.Layer lr(DyeColor color, DynamicRegistry.Key pattern) {
+        return new BannerPatterns.Layer(pattern, color);
+    }
+
+    final List<ItemStack> defaultShields =
+            List.of(
+            createShield(DyeColor.BLACK),
+            createShield(DyeColor.BLACK, lr(DyeColor.WHITE, BannerPattern.STRIPE_LEFT)),
+            createShield(DyeColor.BLACK, lr(DyeColor.WHITE, BannerPattern.RHOMBUS))
+    );
+
     final class Player {
         private final int id = lastEntityId.incrementAndGet();
         private final Connection connection;
         private final String username;
         private final UUID uuid;
 
-        final Instance instance;
-        final Broadcast.World.Entry synchronizerEntry;
+        Instance instance;
+        Broadcast.World.Entry synchronizerEntry;
         GameMode gameMode = GameMode.SURVIVAL;
         Pos position;
         Pos oldPosition;
-
+        final InventoryHolder inventoryHolder = new InventoryHolder(id, this::sendPacket, play -> synchronizerEntry.signalLocal(play));
         ItemStack[] inventory = new ItemStack[46];
         ItemStack cursor = ItemStack.AIR;
 
@@ -332,8 +382,11 @@ public final class PlayerSyncTemplate {
         final ScratchFeature.Movement movement;
         final ScratchFeature.ChunkLoading chunkLoading;
         final ScratchFeature.EntityInteract entityInteract;
-        final ScratchFeature.BlockInteract blockInteract;
         final ScratchFeature.InventoryHandling inventoryHandling;
+
+        private void sendPacket(ServerPacket.Play packet) {
+            this.connection.networkContext.write(packet);
+        }
 
         Player(PlayerInfo info, Instance spawnInstance, Pos spawnPosition) {
             this.connection = info.connection;
@@ -345,13 +398,16 @@ public final class PlayerSyncTemplate {
             this.oldPosition = spawnPosition;
 
             Arrays.fill(inventory, ItemStack.AIR);
-            inventory[0] = ItemStack.of(Material.STONE, 64);
+
+            for (int i = 0; i < defaultShields.size(); i++) {
+                this.inventory[i] = defaultShields.get(i);
+            }
 
             this.synchronizerEntry = instance.synchronizer.makeReceiver(id, position,
                     () -> {
                         final var spawnPacket = new SpawnEntityPacket(
                                 id, uuid, EntityType.PLAYER.id(),
-                                this.position, 0, 0, (short) 0, (short) 0, (short) 0
+                                this.position, 165, 0, (short) 0, (short) 0, (short) 0
                         );
                         return List.of(getAddPlayerToList(), spawnPacket);
                     },
@@ -361,14 +417,14 @@ public final class PlayerSyncTemplate {
             this.messaging = new ScratchFeature.Messaging(new ScratchFeature.Messaging.Mapping() {
                 @Override
                 public Component formatMessage(String message) {
-                    return Component.text(username).color(TextColor.color(0x00FF00))
-                            .append(Component.text(" > "))
+                    return Component.text(username).color(TextColor.color(0xFFFFFF))
+                            .append(Component.text(": "))
                             .append(Component.text(message));
                 }
 
                 @Override
                 public void signal(ServerPacket.Play packet) {
-                    instance.broadcaster.broadcast(packet);
+
                 }
             });
 
@@ -420,37 +476,12 @@ public final class PlayerSyncTemplate {
             this.entityInteract = new ScratchFeature.EntityInteract(new ScratchFeature.EntityInteract.Mapping() {
                 @Override
                 public void left(int id) {
-                    Entity entity = entities.get(id);
-                    if (entity == null) return;
-                    entity.velocity = ScratchVelocityTools.knockback(position, 0.4f, entity.velocity, entity.onGround);
+
                 }
 
                 @Override
                 public void right(int id) {
-                }
-            });
 
-            this.blockInteract = new ScratchFeature.BlockInteract(new ScratchFeature.BlockInteract.Mapping() {
-                @Override
-                public boolean creative() {
-                    return gameMode == GameMode.CREATIVE;
-                }
-
-                @Override
-                public void breakBlock(Point point) {
-                    instance.blockHolder.setBlock(point, Block.BEDROCK);
-                    instance.synchronizer.signalAt(point, new BlockChangePacket(point, Block.BEDROCK));
-                }
-
-                @Override
-                public void placeBlock(Point point) {
-                    instance.blockHolder.setBlock(point, Block.STONE);
-                    instance.synchronizer.signalAt(point, new BlockChangePacket(point, Block.STONE));
-                }
-
-                @Override
-                public void acknowledge(ServerPacket.Play packet) {
-                    connection.networkContext.write(packet);
                 }
             });
 
@@ -458,6 +489,8 @@ public final class PlayerSyncTemplate {
                 @Override
                 public void setPlayerItem(int slot, ItemStack itemStack) {
                     inventory[slot] = itemStack;
+                    System.out.println("afigel");
+//                    new PlaybackPlayer("bot", null, null).updateNewViewer(this);
                 }
 
                 @Override
@@ -466,7 +499,8 @@ public final class PlayerSyncTemplate {
                 }
             });
 
-            this.connection.networkContext.writePlays(initPackets());
+            if (!Player.this.username.startsWith("yunfachi_")) // TODO
+                this.connection.networkContext.writePlays(initPackets());
         }
 
         private List<ServerPacket.Play> initPackets() {
@@ -483,7 +517,7 @@ public final class PlayerSyncTemplate {
             packets.add(joinGamePacket);
             packets.add(new SpawnPositionPacket(position, 0));
             packets.add(new PlayerPositionAndLookPacket(position, (byte) 0, 0));
-            packets.add(getAddPlayerToList());
+//            packets.add(getAddPlayerToList());
 
             packets.add(new UpdateViewDistancePacket(VIEW_DISTANCE));
             packets.add(new UpdateViewPositionPacket(position.chunkX(), position.chunkZ()));
@@ -504,9 +538,13 @@ public final class PlayerSyncTemplate {
                 this.movement.accept(packet);
                 this.chunkLoading.accept(packet);
                 this.entityInteract.accept(packet);
-                this.blockInteract.accept(packet);
             }
             this.oldPosition = this.position;
+
+            UUID uuid = UUID.randomUUID();
+            var entry = new PlayerInfoUpdatePacket.Entry(uuid, "bot",  new ArrayList<PlayerInfoUpdatePacket.Property>(), false,
+                    0, GameMode.CREATIVE, null, null);
+
             return connection.online;
         }
 
@@ -516,5 +554,46 @@ public final class PlayerSyncTemplate {
             return new PlayerInfoUpdatePacket(EnumSet.of(PlayerInfoUpdatePacket.Action.ADD_PLAYER, PlayerInfoUpdatePacket.Action.UPDATE_LISTED),
                     List.of(infoEntry));
         }
+    }
+}
+
+@SuppressWarnings("UnstableApiUsage")
+class PlaybackPlayer extends Entity {
+    private final String username;
+
+    private final String skinTexture;
+    private final String skinSignature;
+
+    public PlaybackPlayer(@NotNull String username, @Nullable String skinTexture, @Nullable String skinSignature) {
+        super(EntityType.PLAYER);
+        this.username = username;
+
+        this.skinTexture = skinTexture;
+        this.skinSignature = skinSignature;
+
+        setNoGravity(true);
+    }
+
+    public void updateNewViewer(Player player) {
+        var properties = new ArrayList<PlayerInfoUpdatePacket.Property>();
+        if (skinTexture != null && skinSignature != null) {
+            properties.add(new PlayerInfoUpdatePacket.Property("textures", skinTexture, skinSignature));
+        }
+        var entry = new PlayerInfoUpdatePacket.Entry(getUuid(), username, properties, false,
+                0, GameMode.SURVIVAL, null, null);
+        player.sendPacket(new PlayerInfoUpdatePacket(PlayerInfoUpdatePacket.Action.ADD_PLAYER, entry));
+
+        // Spawn the player entity
+        super.updateNewViewer(player);
+
+        // Enable skin layers
+        player.sendPackets(new EntityMetaDataPacket(getEntityId(), Map.of(17, Metadata.Byte((byte) 127))));
+    }
+
+    @Override
+    public void updateOldViewer(@NotNull Player player) {
+        super.updateOldViewer(player);
+
+        player.sendPacket(new PlayerInfoRemovePacket(getUuid()));
     }
 }
